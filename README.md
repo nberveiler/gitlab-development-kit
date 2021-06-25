@@ -34,7 +34,7 @@ The following installation methods are supported, actively maintained, and teste
 - [One-line installation](doc/index.md#one-line-installation):
 
   ```shell
-  curl "https://gitlab.com/gitlab-org/gitlab-development-kit/-/raw/main/support/install" | bash
+  curl "https://raw.githubusercontent.com/nberveiler/gitlab-development-kit/main/support/install" | bash
   ```
 
 - [Simple installation](doc/index.md) on your local system. Requires at least
