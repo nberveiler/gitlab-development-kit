@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+
+# frozen_string_literal: true
+
+require_relative '../../lib/gdk'
+
+config = GDK.config
+dev = config.dev
+dev_bins = dev.__bins
+
+vale = dev.vale
+vale_version = vale.version
+vale_platform = vale.__platform
+vale_binary = vale.__binary
+vale_versioned_binary = vale.__versioned_binary
+
+unless config.__platform_supported?
+  GDK::Output.warn("Need vale #{vale_version} to be installed at #{vale_versioned_binary}")
+  GDK::Output.info('To install vale, please consult the docs at https://docs.errata.ai/vale/install')
+  GDK::Output.abort('Installing vale automatically only supported on macOS and Linux.')
+end
+
+unless vale_versioned_binary.exist?
+  GDK::Output.info("Installing vale #{vale_version}..")
+  Shellout.new("mkdir -p #{dev_bins}").stream
+  Shellout.new("curl -C - -L --fail --silent 'https://github.com/errata-ai/vale/releases/download/v#{vale_version}/vale_#{vale_version}_#{vale_platform}_64-bit.tar.gz' | tar xzf - -C #{dev_bins} vale").stream
+  Shellout.new("mv #{vale_binary} #{vale_versioned_binary}").stream
+end

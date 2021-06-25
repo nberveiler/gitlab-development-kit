@@ -1,0 +1,25 @@
+.docker:use-docker-in-docker:
+  image: docker:${DOCKER_VERSION}
+  services:
+    - name: docker:${DOCKER_VERSION}-dind
+      command: ["--experimental"]
+  variables:
+    DOCKER_VERSION: "20.10.6"
+    DOCKER_DRIVER: overlay2
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  tags:
+    # See https://gitlab.com/gitlab-com/www-gitlab-com/-/issues/7019 for tag descriptions
+    - gitlab-org-docker
+
+.docker:build-docker-in-docker:
+  extends:
+    - .docker:use-docker-in-docker
+  image: docker:git
+  before_script:
+    - nproc
+    - free -m
+    - apk add --no-cache jq curl
+    - ./support/docker ci-login
+  after_script:
+    - ./support/docker ci-logout

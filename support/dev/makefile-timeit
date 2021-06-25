@@ -1,0 +1,82 @@
+#!/usr/bin/env ruby
+
+# frozen_string_literal: true
+
+require 'yaml'
+
+ROOT_PATH = File.expand_path(File.join(File.dirname(__FILE__), '..', '..'))
+TIMING_FILE = "#{ROOT_PATH}/tmp/gdk_update_timing.yml"
+
+ALLOWED_ACTIONS = %w[time-service-start time-service-end start summarize].freeze
+
+def action_and_service_name_from_args(args)
+  if args.empty? || !ALLOWED_ACTIONS.include?(args[0])
+    puts "ERROR: Usage - #{__FILE__} <#{ALLOWED_ACTIONS.join('|')}> [<service>]"
+    exit(1)
+  end
+
+  args
+end
+
+def skeleton_timings
+  { 'services' => {} }
+end
+
+def current_timings
+  File.exist?(TIMING_FILE) ? YAML.load_file(TIMING_FILE) : skeleton_timings
+end
+
+def update_timings(data)
+  File.write(TIMING_FILE, data.to_yaml)
+end
+
+def now
+  Time.now.to_i
+end
+
+def cleanup!
+  File.delete(TIMING_FILE) if File.exist?(TIMING_FILE)
+end
+
+#################################################################################
+
+action, service_name = action_and_service_name_from_args(ARGV)
+
+case action
+when 'start'
+  cleanup!
+  new_yaml = skeleton_timings.merge('start' => now)
+
+  update_timings(new_yaml)
+
+when 'time-service-start'
+  new_yaml = current_timings
+  new_yaml['services'][service_name] = { 'start' => now }
+
+  update_timings(new_yaml)
+when 'time-service-end'
+  if File.exist?(TIMING_FILE)
+    new_yaml = current_timings
+
+    if new_yaml['services'][service_name]
+      new_yaml['services'][service_name]['end'] = now
+
+      update_timings(new_yaml)
+    else
+      warn "WARNING: Service '#{service_name}' does not have a corresponding 'start' key."
+    end
+  end
+when 'summarize'
+  updated_timings = current_timings.merge('end' => now)
+  updated_timings['services'].each do |name, timings|
+    took = if timings['end'] && timings['start']
+             timings['end'] - timings['start']
+           else
+             'unknown'
+           end
+
+    puts "#{name}: #{took} sec(s)"
+  end
+
+  puts "\nTook #{updated_timings['end'] - updated_timings['start']} sec(s) total."
+end

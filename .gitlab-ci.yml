@@ -1,0 +1,33 @@
+stages:
+  - pre
+  - build
+  - test
+  - verify
+  - deploy
+
+variables:
+  VERIFY_IMAGE: $CI_REGISTRY_IMAGE/asdf-bootstrapped-verify:$CI_COMMIT_REF_SLUG
+  GITPOD_WORKSPACE_IMAGE_BASE: $CI_REGISTRY_IMAGE/gitpod-workspace
+  GITPOD_WORKSPACE_IMAGE: $CI_REGISTRY_IMAGE/gitpod-workspace:$CI_COMMIT_REF_SLUG
+  GDK_DEBUG: "true"
+  GIT_CURL_VERBOSE: 1
+
+default:
+  interruptible: true
+  tags:
+    - gitlab-org
+  before_script:
+    - ulimit -a
+    - nproc
+    - free -m
+    - env
+
+include:
+  - template: 'Workflows/MergeRequest-Pipelines.gitlab-ci.yml'
+  - local: .gitlab/ci/_rules.gitlab-ci.yml
+  - local: .gitlab/ci/_docker.gitlab-ci.yml
+  - local: .gitlab/ci/pre.gitlab-ci.yml
+  - local: .gitlab/ci/build.gitlab-ci.yml
+  - local: .gitlab/ci/test.gitlab-ci.yml
+  - local: .gitlab/ci/verify.gitlab-ci.yml
+  - local: .gitlab/ci/deploy.gitlab-ci.yml

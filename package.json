@@ -1,0 +1,18 @@
+{
+  "name": "gitlab-development-kit",
+  "version": "0.0.1",
+  "description": "GitLab Development Kit",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/gitlab-org/gitlab-development-kit.git"
+  },
+  "author": "GDK Team <gitlab_rubygems@gitlab.com>",
+  "bugs": {
+    "url": "https://gitlab.com/gitlab-org/gitlab-development-kit/issues"
+  },
+  "homepage": "https://gitlab.com/gitlab-org/gitlab-development-kit#readme",
+  "dependencies": {
+    "markdownlint-cli": "^0.27.0"
+  }
+}

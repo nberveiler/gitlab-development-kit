@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+parent_path=$(dirname "$0")
+
+# shellcheck source=support/bootstrap-common.sh
+source "${parent_path}"/bootstrap-common.sh
+
+ASDF_VERSION_TO_INSTALL="v0.8.0"
+
+GDK_BOOTSTRAPPED_FILE="${GDK_CACHE_DIR}/.gdk_bootstrapped"
+
+asdf_install() {
+  if [[ ! -d "${CURRENT_ASDF_DIR}" ]]; then
+    git clone https://github.com/asdf-vm/asdf.git "${CURRENT_ASDF_DIR}" --branch ${ASDF_VERSION_TO_INSTALL}
+
+    asdf_add_initializer "${HOME}/.bashrc" "asdf.sh"
+    asdf_add_initializer "${HOME}/.zshrc" "asdf.sh"
+
+    return 0
+  fi
+
+  return 0
+}
+
+asdf_add_initializer() {
+  [[ -f "${1}" ]] && echo -e "\n# Added by GDK bootstrap\nsource ${CURRENT_ASDF_DIR}/${2}" >> "${1}"
+}
+
+asdf_install_update_plugins() {
+  cut -d ' ' -f 1 .tool-versions | grep -v '^#' | while IFS= read -r plugin
+  do
+    asdf plugin update "${plugin}" || asdf plugin add "${plugin}"
+  done
+
+  # Install Node.js' OpenPGP key
+  if [[ ! -f "${HOME}/.gnupg/asdf-nodejs.gpg" ]]; then
+    bash -c "${CURRENT_ASDF_DATA_DIR}/plugins/nodejs/bin/import-release-team-keyring" > /dev/null 2>&1
+  fi
+
+  return 0
+}
+
+asdf_install_tools() {
+  # Install all tools specified in .tool-versions
+  local asdf_opts
+
+  if [[ "${OSTYPE}" == "darwin"* && "${CPU_TYPE}" == "arm64" ]]; then
+    # Support running brew under Rosetta 2 on Apple Silicon machines
+    asdf_opts="arch -x86_64"
+  else
+    asdf_opts=""
+  fi
+
+  ruby_configure_opts=$(ruby_configure_opts)
+  bash -c "MAKELEVEL=0 ${ruby_configure_opts} ${asdf_opts} asdf install"
+
+  return $?
+}
+
+gdk_prepare_directory() {
+  # TODO: Touching .gdk-install-root will be redundant shortly.
+  [[ ! -f ".gdk-install-root"  ]] && echo "${PWD}" > .gdk-install-root
+
+  return 0
+}
+
+gdk_mark_bootstrapped() {
+  mkdir -p "${GDK_CACHE_DIR}"
+  touch "${GDK_BOOTSTRAPPED_FILE}"
+
+  echo
+  echo "INFO: Bootstrap successful!"
+  echo "INFO: To make sure GDK commands are available in this shell, run:"
+  echo
+  echo "source \"${CURRENT_ASDF_DIR}/asdf.sh\""
+  echo
+}
+
+###############################################################################
+
+if [[ -f "${GDK_BOOTSTRAPPED_FILE}" ]]; then
+  echo "INFO: This GDK has already been bootstrapped."
+  echo "INFO: Remove '${GDK_BOOTSTRAPPED_FILE}' to re-bootstrap."
+  exit 0
+fi
+
+common_preflight_checks
+
+echo "INFO: Setting up platform.."
+if ! setup_platform; then
+  error "Failed to install set up platform." >&2
+fi
+
+echo "INFO: Installing asdf.."
+if ! asdf_install; then
+  error "Failed to install asdf." >&2
+fi
+
+echo "INFO: Installing/updating asdf plugins.."
+if ! asdf_install_update_plugins; then
+  error "Failed to install some asdf plugins." >&2
+fi
+
+echo "INFO: Installing asdf tools.."
+if ! asdf_install_tools; then
+  error "Failed to install some asdf tools." >&2
+fi
+
+echo "INFO: Reshimming asdf.."
+if ! asdf_reshim; then
+  error "Failed to reshim asdf." >&2
+fi
+
+echo "INFO: Installing gitlab-development-kit Ruby gem.."
+if ! gdk_install_gem; then
+  error "Failed to install gitlab-development-kit Ruby gem." >&2
+fi
+
+echo "INFO: Preparing GDK directory.."
+if ! gdk_prepare_directory; then
+  error "Failed to prepare GDK directory." >&2
+fi
+
+echo "INFO: Configuring Ruby Bundler.."
+if ! configure_ruby_bundler; then
+  error "Failed to configure Ruby Bundler." >&2
+fi
+
+gdk_mark_bootstrapped

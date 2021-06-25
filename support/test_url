@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+#
+# frozen_string_literal: true
+
+require_relative '../lib/gdk'
+
+url = ARGV[0] || GDK::TestURL.default_url
+quiet = ENV['QUIET'] != 'false'
+
+begin
+  exit(GDK::TestURL.new(url, quiet: quiet).wait)
+rescue GDK::TestURL::UrlAppearsInvalid
+  GDK::Output.error("'#{url}' does not appear to be a valid URL?")
+end

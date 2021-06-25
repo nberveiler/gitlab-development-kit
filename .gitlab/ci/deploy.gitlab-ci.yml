@@ -1,0 +1,24 @@
+pages:
+  stage: deploy
+  needs:
+    - job: yard
+      artifacts: true
+  script:
+    - cp -r yard public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+deploy-gitpod-workspace-image:
+  extends:
+    - .docker:build-docker-in-docker
+  stage: deploy
+  needs:
+    - build-gitpod-workspace-image
+  script:
+    - ./support/gitpod/docker-tag-image-as-stable
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: manual

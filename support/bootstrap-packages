@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+parent_path=$(dirname "$0")
+
+# shellcheck source=support/bootstrap-common.sh
+source "${parent_path}"/bootstrap-common.sh
+
+
+###############################################################################
+common_preflight_checks
+
+echo "INFO: Setting up platform.."
+if ! setup_platform; then
+  error "Failed to install set up platform." >&2
+fi

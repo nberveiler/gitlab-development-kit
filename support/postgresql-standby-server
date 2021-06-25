@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -eu
+
+socket_path=$1
+pg_port=$2
+postgres_data_dir=$(gdk config get postgresql.data_dir 2>/dev/null)
+postgres_version=$(gdk config get postgresql.active_version 2>/dev/null)
+
+if [[ $postgres_version =~ ^12 ]] && [ ! -f "$postgres_data_dir/standby.signal" ]; then
+  touch "$postgres_data_dir"/standby.signal
+  cat <<EOF >> "$postgres_data_dir"/postgresql.conf
+primary_conninfo = 'host=${socket_path} port=${pg_port} user=gitlab_replication'
+primary_slot_name = 'gitlab_gdk_replication_slot'
+EOF
+else
+  cat <<EOF >> "$postgres_data_dir"/recovery.conf
+standby_mode = 'on'
+primary_conninfo = 'host=${socket_path} port=${pg_port} user=gitlab_replication'
+primary_slot_name = 'gitlab_gdk_replication_slot'
+EOF
+fi

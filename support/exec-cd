@@ -1,0 +1,11 @@
+#!/usr/bin/env ruby
+#
+# frozen_string_literal: true
+
+# This script implements 'cd foo && exec bar' without the need to invoke
+# /bin/sh for the ' && '.
+
+abort "Usage: #{$PROGRAM_NAME} DIRECTORY COMMAND [ARGUMENTS ...]" if ARGV.count < 2
+
+Dir.chdir(ARGV.shift)
+exec(*ARGV)

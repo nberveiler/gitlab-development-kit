@@ -1,0 +1,105 @@
+docs-lint:
+  extends: .rules:docs-changes
+  image: registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.13-vale-2.10.2-markdownlint-0.26.0
+  stage: test
+  needs: []
+  script:
+    - make lint
+
+rubocop:
+  extends: .rules:code-changes
+  image: ruby:2.7
+  stage: test
+  needs: []
+  variables:
+    BUNDLE_ARGS: "--path vendor/bundle"
+  script:
+    - make rubocop
+
+rspec:
+  extends: .rules:code-changes
+  image: ruby:2.7
+  stage: test
+  needs: []
+  variables:
+    RSPEC_ARGS: "--format doc --format RspecJunitFormatter --out rspec.xml"
+    BUNDLE_ARGS: "--path vendor/bundle"
+  script:
+    - pwd > .gdk-install-root
+    - make rspec
+  cache:
+    key: "ruby-2.7-bundle"
+    paths:
+      - ./vendor/bundle
+  artifacts:
+    paths:
+      - rspec.xml
+    reports:
+      junit: rspec.xml
+      cobertura: coverage/coverage.xml
+
+include:
+  - template: Code-Quality.gitlab-ci.yml
+  - template: Container-Scanning.gitlab-ci.yml
+
+code_quality:
+  extends:
+    - .docker:use-docker-in-docker
+  rules: !reference ['.rules:code-changes', rules]
+
+container_scanning:
+  before_script:
+    - export DOCKER_IMAGE=${VERIFY_IMAGE}
+  needs:
+    - release-image
+  rules: !reference ['.rules:code-changes', rules]
+
+shellcheck:
+  extends: .rules:code-changes
+  stage: test
+  needs: []
+  image: ruby:2.7
+  script:
+    - make shellcheck
+
+checkmake:
+  stage: test
+  needs: []
+  extends: .rules:code-changes
+  # https://gitlab.com/gitlab-org/gitlab-development-kit/-/issues/1234
+  image: $CI_REGISTRY_IMAGE/asdf-bootstrapped-verify:main
+  script:
+    - make checkmake
+
+yard:
+  stage: test
+  needs: []
+  image: ruby:2.7
+  script:
+    - bundle install --jobs 4 --path vendor/bundle
+    - bundle exec yardoc
+  cache:
+    key: "ruby-2.7-bundle"
+    paths:
+      - ./vendor/bundle
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - yard/*
+
+verify-gdk-example-yml:
+  extends: .rules:code-changes
+  image: ruby:2.7
+  stage: test
+  needs: []
+  script:
+    - make verify-gdk-example-yml
+
+danger-review:
+  extends:
+    - .review:rules:danger
+  image: registry.gitlab.com/gitlab-org/gitlab-build-images:danger
+  stage: test
+  needs: []
+  script:
+    - danger --fail-on-errors=true --verbose

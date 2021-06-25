@@ -1,0 +1,19 @@
+[redis]
+URL = "unix:<%= config.redis.__socket_file %>"
+
+<%- if config.object_store.consolidated_form? && config.object_store.connection['provider'] -%>
+[object_storage]
+  provider = "<%= config.object_store.connection['provider'] %>"
+
+  <%- if config.object_store.connection['provider'] == 'AWS' -%>
+[object_storage.s3]
+  aws_access_key_id = "<%= config.object_store.connection['aws_access_key_id'] %>"
+  aws_secret_access_key = "<%= config.object_store.connection['aws_secret_access_key'] %>"
+  <%- end -%>
+
+  <%- if config.object_store.connection['provider'] == 'AzureRM' -%>
+[object_storage.azurerm]
+  azure_storage_account_name = "<%= config.object_store.connection['azure_storage_account_name'] %>"
+  azure_storage_access_key = "<%= config.object_store.connection['azure_storage_access_key'] %>"
+  <%- end -%>
+<%- end -%>

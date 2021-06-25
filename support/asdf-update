@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+parent_path=$(dirname "$0")
+
+# shellcheck source=support/bootstrap-common.sh
+source "${parent_path}"/bootstrap-common.sh
+
+DIVIDER="--------------------------------------------------------------------------------"
+
+header_print() {
+  echo
+  echo "${DIVIDER}"
+  echo "${1}"
+  echo "${DIVIDER}"
+}
+
+asdf_update_plugins() {
+  cut -d ' ' -f 1 .tool-versions | grep -v '^#' | while IFS= read -r plugin
+  do
+    asdf plugin update "${plugin}" || asdf plugin add "${plugin}"
+  done
+
+  # Install Node.js' OpenPGP key
+  if [[ ! -f "${HOME}/.gnupg/asdf-nodejs.gpg" ]]; then
+    bash -c "${CURRENT_ASDF_DATA_DIR}/plugins/nodejs/bin/import-release-team-keyring" > /dev/null 2>&1
+  fi
+
+  return 0
+}
+
+asdf_update_tools() {
+  # Install all tools specified in .tool-versions
+  ruby_configure_opts=$(ruby_configure_opts)
+  bash -c "MAKELEVEL=0 ${ruby_configure_opts} asdf install"
+
+  return $?
+}
+
+###############################################################################
+
+if ! ensure_supported_platform; then
+  echo
+  echo "ERROR: Unsupported platform. Only macOS, Ubuntu, and Debian supported." >&2
+  echo "INFO: Please visit https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/advanced.md to bootstrap manually." >&2
+  exit 1
+fi
+
+if ! ensure_not_root; then
+  error "Running as root is not supported."
+fi
+
+if ! ensure_sudo_available; then
+  error "sudo is required, please install." >&2
+fi
+
+header_print "Ensuring platform software installed"
+if ! setup_platform; then
+  error "Failed to install platform software." >&2
+fi
+
+header_print "Updating asdf plugins"
+if ! asdf_update_plugins; then
+  error "Failed to update some asdf plugins." >&2
+fi
+
+header_print "Updating asdf tools"
+if ! asdf_update_tools; then
+  error "Failed to update some asdf tools." >&2
+fi
+
+if ! asdf_reshim; then
+  error "Failed to reshim asdf." >&2
+fi
+
+if ! gdk_install_gem; then
+  error "Failed to install gitlab-development-kit Ruby gem." >&2
+fi
+
+if ! configure_ruby_bundler; then
+  error "Failed to configure Ruby Bundler." >&2
+fi

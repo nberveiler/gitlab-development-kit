@@ -1,0 +1,15 @@
+development:
+  adapter: postgresql
+  encoding: unicode
+  database: gitlabhq_geo_development
+  host: <%= config.postgresql.geo.host %>
+  port: <%= config.postgresql.geo.port %>
+  pool: 5
+
+test: &test
+  adapter: postgresql
+  encoding: unicode
+  database: gitlabhq_geo_test
+  host: <%= config.postgresql.geo.host %>
+  port: <%= config.postgresql.geo.port %>
+  pool: 5

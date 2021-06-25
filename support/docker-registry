@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -e
+
+gdk_root=$(gdk config get gdk_root)
+
+registry_enabled=$(gdk config get registry.enabled 2>/dev/null)
+registry_listen_address=$(gdk config get registry.listen_address 2>/dev/null)
+registry_port=$(gdk config get registry.port 2>/dev/null)
+registry_port=${registry_port:-5000}
+registry_uid=$(gdk config get registry.uid 2>/dev/null)
+registry_uid=${registry_uid:-$(id -u)}
+registry_gid=$(gdk config get registry.gid 2>/dev/null)
+registry_gid=${registry_gid:-$(id -g)}
+registry_image=$(gdk config get registry.image 2>/dev/null)
+
+run_opts=()
+if [[ "${registry_enabled}" == "true" ]]; then
+  if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    run_opts+=("--net" "host")
+  fi
+
+  exec docker run --rm -p "${registry_listen_address}:${registry_port}:${registry_port}" "${run_opts[@]}" \
+      -u "${registry_uid}":"${registry_gid}" \
+      -v "${gdk_root}/registry/config.yml:/etc/docker/registry/config.yml:ro" \
+      -v "${gdk_root}/registry/storage:/var/lib/registry" \
+      -v "${gdk_root}/localhost.crt:/etc/docker/registry/localhost.crt:ro" \
+      -v "${gdk_root}/registry_host.crt:/etc/docker/registry/registry_host.crt:ro" \
+      -v "${gdk_root}/registry_host.key:/etc/docker/registry/registry_host.key:ro" \
+      "${registry_image:-registry.gitlab.com/gitlab-org/build/cng/gitlab-container-registry:v2.9.1-gitlab}"
+else
+  echo "Docker registry disabled."
+  # Keep active so the process supervisor (i.e. runit) thinks everything is okay
+  exec tail -f /dev/null
+fi

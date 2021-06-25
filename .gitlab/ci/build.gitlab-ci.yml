@@ -1,0 +1,19 @@
+release-image:
+  extends:
+    - .rules:code-changes
+    - .docker:build-docker-in-docker
+  stage: build
+  script:
+    - ./support/docker ci-build-if-necessary
+
+build-gitpod-workspace-image:
+  extends:
+    - .docker:build-docker-in-docker
+  stage: build
+  script:
+    - ./support/gitpod/docker-build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_MERGE_REQUEST_IID'
+      changes:
+        - "support/gitpod/**/*"

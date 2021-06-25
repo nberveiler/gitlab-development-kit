@@ -1,0 +1,30 @@
+#!/usr/bin/env ruby
+
+# frozen_string_literal: true
+
+require_relative '../../lib/gdk'
+
+config = GDK.config
+dev = config.dev
+dev_bins = dev.__bins
+
+shellcheck = dev.shellcheck
+shellcheck_version = shellcheck.version
+shellcheck_platform = config.__platform
+shellcheck_architecture = config.__architecture
+shellcheck_binary = shellcheck.__binary
+shellcheck_versioned_binary = shellcheck.__versioned_binary
+
+unless config.__platform_supported?
+  GDK::Output.warn("Need shellcheck #{shellcheck_version} to be installed at #{shellcheck_versioned_binary}")
+  GDK::Output.info('To install shellcheck, please consult the docs at https://github.com/koalaman/shellcheck#installing')
+  GDK::Output.abort('Installing shellcheck automatically only supported on macOS and Linux.')
+end
+
+unless shellcheck_versioned_binary.exist?
+  GDK::Output.info("Installing shellcheck #{shellcheck_version}..")
+  Shellout.new("mkdir -p #{dev_bins}").stream
+  Shellout.new("curl -C - -L --fail --silent 'https://github.com/koalaman/shellcheck/releases/download/v#{shellcheck_version}/shellcheck-v#{shellcheck_version}.#{shellcheck_platform}.#{shellcheck_architecture}.tar.xz' | tar xJf - -C #{dev_bins} --strip-components=1 shellcheck-v#{shellcheck_version}/shellcheck").stream
+  Shellout.new("mv #{shellcheck_binary} #{shellcheck_versioned_binary}").stream
+  Shellout.new("ln -nfs #{shellcheck_versioned_binary} #{shellcheck_binary}").stream
+end

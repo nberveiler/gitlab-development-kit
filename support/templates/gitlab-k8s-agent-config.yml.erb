@@ -1,0 +1,27 @@
+agent:
+  listen:
+    network: "<%= config.gitlab_k8s_agent.agent_listen_network %>"
+    address: "<%= config.gitlab_k8s_agent.agent_listen_address %>"
+    websocket: <%= config.gitlab_k8s_agent.__agent_listen_websocket %>
+  kubernetes_api:
+    listen:
+      network: "<%= config.gitlab_k8s_agent.k8s_api_listen_network %>"
+      address: "<%= config.gitlab_k8s_agent.k8s_api_listen_address %>"
+    url_path_prefix: "<%= config.gitlab_k8s_agent.__k8s_api_listen_url_path %>"
+gitlab:
+  address: "<%= config.gitlab_k8s_agent.__gitlab_address %>"
+  authentication_secret_file: "<%= config.gitlab_k8s_agent.__secret_file %>"
+api:
+  listen:
+    network: "<%= config.gitlab_k8s_agent.internal_api_listen_network %>"
+    address: "<%= config.gitlab_k8s_agent.internal_api_listen_address %>"
+    authentication_secret_file: "<%= config.gitlab_k8s_agent.__secret_file %>"
+redis:
+  network: unix
+  server:
+    address: "<%= config.redis.__socket_file %>"
+private_api:
+  listen:
+    network: "<%= config.gitlab_k8s_agent.private_api_listen_network %>"
+    address: "<%= config.gitlab_k8s_agent.private_api_listen_address %>"
+    authentication_secret_file: "<%= config.gitlab_k8s_agent.__private_api_secret_file %>"

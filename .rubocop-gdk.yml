@@ -1,0 +1,58 @@
+---
+inherit_gem:
+  gitlab-styles:
+    - rubocop-default.yml
+
+require:
+  - ./rubocop/rubocop
+
+AllCops:
+  TargetRubyVersion: 2.7.2
+  Exclude:
+    - 'Brewfile'
+    - 'Dangerfile'
+    - 'danger/**/*'
+    - 'elasticsearch/**/*'
+    - 'gitaly/**/*'
+    - 'gitlab-docs/**/*'
+    - 'gitlab-elasticsearch-indexer/**/*'
+    - 'gitlab-k8s-agent/**/*'
+    - 'gitlab-pages/**/*'
+    - 'gitlab-runner/**/*'
+    - 'gitlab-shell/**/*'
+    - 'gitlab-ui/**/*'
+    - 'gitlab-workhorse/**/*'
+    - 'gitlab/**/*'
+    - 'go-gitlab-shell/**/*'
+    - 'grafana/**/*'
+    - 'influxdb/**/*'
+    - 'jaeger/**/*'
+    - 'log/**/*'
+    - 'node_modules/**/*'
+    - 'postgresql-geo/**/*'
+    - 'postgresql-primary/**/*'
+    - 'postgresql/**/*'
+    - 'repositories/**/*'
+    - 'services/**/*'
+    - 'sv/**/*'
+    - 'tmp/**/*'
+    - 'tooling/**/*'
+    - 'vendor/**/*'
+
+CodeReuse/ActiveRecord:
+  Enabled: false
+
+Layout/LineLength:
+  Enabled: false
+
+Rails:
+  Enabled: false
+
+RSpec/ContextWording:
+  Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Enabled: false
+
+RSpec/PredicateMatcher:
+  Enabled: false

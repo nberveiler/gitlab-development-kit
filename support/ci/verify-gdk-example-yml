@@ -1,0 +1,12 @@
+#!/bin/bash
+
+rake gdk.example.yml
+
+git diff --exit-code gdk.example.yml
+result=$?
+
+if [[ ${result} != 0 ]]; then
+  echo
+  echo "ERROR: There are gdk.example.yml changes that need to be checked in.  Run 'rake gdk.example.yml' to generate."
+  exit ${result}
+fi

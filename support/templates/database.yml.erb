@@ -1,0 +1,28 @@
+development:
+  adapter: postgresql
+  encoding: unicode
+  database: gitlabhq_development
+  host: <%= config.postgresql.host %>
+  port: <%= config.postgresql.port %>
+  pool: 10
+  prepared_statements: false
+  variables:
+    statement_timeout: 120s
+<%- if config.load_balancing.enabled -%>
+  <%- unless config.geo? -%>
+  load_balancing:
+    hosts:
+      - <%= config.postgresql.host %>
+  <%- end -%>
+<%- end -%>
+
+test: &test
+  adapter: postgresql
+  encoding: unicode
+  database: gitlabhq_test
+  host: <%= config.postgresql.host %>
+  port: <%= config.postgresql.port %>
+  pool: 10
+  prepared_statements: false
+  variables:
+    statement_timeout: 120s

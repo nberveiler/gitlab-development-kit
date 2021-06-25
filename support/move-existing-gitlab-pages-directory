@@ -1,0 +1,30 @@
+#!/bin/sh
+
+set -e
+
+if [ -d gitlab-pages/.git ]; then
+  # A gitlab-pages checkout already exists: do nothing
+  exit 0
+fi
+
+old_gitlab_pages_dir=gitlab-pages/src/gitlab.com/gitlab-org/gitlab-pages
+
+if ! [ -d ${old_gitlab_pages_dir}/.git ]; then
+  # There is no "old" gitlab-pages checkout. Exit with a non-zero code to
+  # signal to the caller that a regular git clone is needed.
+  exit 1
+fi
+
+# We are going to make changes. It's good to be explicit about that, and
+# if something fails, it helps the user to see what failed. With "set
+# -x" we get a cheap kind of verbose mode.
+set -x
+
+temp_gitlab_pages_dir=$(mktemp "$(pwd)/gitlab-pages.XXXXXX")
+
+rm "${temp_gitlab_pages_dir}"
+mv "${old_gitlab_pages_dir}" "${temp_gitlab_pages_dir}"
+
+mv gitlab-pages "$(date +.backups/go-gitlab-pages.%Y-%m-%d_%H.%M.%S)"
+
+mv "${temp_gitlab_pages_dir}" gitlab-pages

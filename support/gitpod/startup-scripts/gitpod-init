@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# This script is executed during the Gitpod prebuild
+# or on workspace start (when no prebuild is available)
+# https://www.gitpod.io/docs/config-start-tasks/
+
+set -eo pipefail
+
+source "$HOME/gitpod-common"
+
+cd /workspace/gitlab-development-kit
+
+# make webpack static, prevents that GitLab tries to connect to localhost webpack from browser outside the workspace
+echo "webpack:" >> gdk.yml
+echo "  static: true" >> gdk.yml
+
+# reconfigure GDK
+log "Reconfiguring GDK"
+gdk reconfigure
+
+# run DB migrations
+log "Running DB migrations"
+make gitlab-db-migrate
+
+# stopping GitLab
+log "Stopping GDK"
+gdk stop
+log "GDK stopped"

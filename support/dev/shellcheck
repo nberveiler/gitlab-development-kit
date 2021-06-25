@@ -1,0 +1,23 @@
+#!/bin/sh
+
+# Spellcheck rule definitions
+#
+# https://github.com/koalaman/shellcheck/wiki/SC1071 - ShellCheck only supports sh/bash/dash/ksh scripts. Sorry!
+
+root="$(cd "$(dirname "$0")/../.." || exit ; pwd -P)"
+
+shellcheck_binary="${root}/dev/bin/shellcheck"
+
+if ! command -v ${shellcheck_binary} > /dev/null 2>&1 ; then
+  echo "ERROR: '${shellcheck_binary}' is not available, please run 'make shellcheck' first."
+  exit 1
+fi
+
+exec find "${root}/support" "${root}/support/ci" "${root}/support/completions" \
+      -maxdepth 1 \
+      -type f \
+      -not -path "*/support/pg_hba.conf.add" \
+      -not -path "*/support/.rubocop.yml" \
+      -not -path "*.swp" \
+      -print0 \
+| xargs -0 ${shellcheck_binary} --exclude=SC1071 --external-sources --

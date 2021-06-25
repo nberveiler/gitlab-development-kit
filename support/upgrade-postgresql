@@ -1,0 +1,220 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'forwardable'
+require 'set'
+
+require_relative '../lib/gdk'
+
+class PostgresUpgrader
+  extend Forwardable
+
+  POSTGRESQL_VERSIONS = [12, 11, 10, 9.6].freeze
+
+  def_delegators :postgresql, :current_data_dir, :current_version, :upgrade_needed?
+
+  def initialize(target_version = GDK::Postgresql.target_version_major)
+    @target_version = target_version
+
+    check!
+  end
+
+  def check!
+    GDK::Output.info "Available PostgreSQL versions: #{available_versions}"
+
+    GDK::Output.abort "Unable to find target PostgreSQL version #{target_version}" unless available_versions.include?(target_version)
+    GDK::Output.abort "Unable to find current PostgreSQL version #{current_version}" unless available_versions.include?(current_version)
+  end
+
+  def upgrade!
+    unless upgrade_needed?(target_version)
+      GDK::Output.success "'#{current_data_dir}' is already compatible with PostgreSQL #{target_version}."
+      return
+    end
+
+    gdk_stop
+    init_db_in_target_path
+    rename_current_data_dir
+    pg_upgrade
+    promote_new_db
+    gdk_reconfigure
+
+    GDK::Output.success "Upgraded '#{current_data_dir}' from PostgreSQL #{current_version} to #{target_version}."
+  rescue StandardError => e
+    GDK::Output.error "An error occurred: #{e}"
+    GDK::Output.warn "Rolling back.."
+    rename_current_data_dir_back
+  end
+
+  private
+
+  attr_reader :target_version
+
+  def postgresql
+    @postgresql ||= GDK::Postgresql.new
+  end
+
+  def renamed_current_data_dir
+    @renamed_current_data_dir ||= File.join(current_data_dir + ".#{current_version}.#{Time.now.to_i}")
+  end
+
+  def target_path
+    @target_path ||= File.join(current_data_dir + ".#{target_version}.#{Time.now.to_i}")
+  end
+
+  def gdk_stop
+    run!('gdk stop', config.gdk_root)
+  end
+
+  def init_db_in_target_path
+    cmd = "#{initdb_bin(target_version)} --locale=C -E utf-8 #{target_path}"
+    GDK::Output.info "Initializing '#{target_path}' for PostgreSQL #{target_version}.."
+    run_in_tmp!(cmd)
+  end
+
+  def rename_current_data_dir
+    GDK::Output.info "Renaming #{current_data_dir} to #{renamed_current_data_dir}"
+    FileUtils.mv(current_data_dir, renamed_current_data_dir)
+  end
+
+  def rename_current_data_dir_back
+    return unless File.exist?(renamed_current_data_dir)
+
+    GDK::Output.info "Renaming #{renamed_current_data_dir} to #{current_data_dir}"
+    FileUtils.mv(renamed_current_data_dir, current_data_dir)
+  end
+
+  def pg_upgrade
+    cmd = "#{pg_upgrade_bin(target_version)} \
+      --old-bindir #{bin_path(current_version)} \
+      --new-bindir #{bin_path(target_version)} \
+      --old-datadir #{renamed_current_data_dir} \
+      --new-datadir #{target_path}"
+
+    GDK::Output.info "Upgrading '#{renamed_current_data_dir}' (PostgreSQL #{current_version}) to '#{target_path}' PostgreSQL #{target_version}.."
+    run_in_tmp!(cmd)
+  end
+
+  def promote_new_db
+    GDK::Output.info "Promoting newly-creating database from '#{target_path}' to '#{current_data_dir}'"
+    FileUtils.mv(target_path, current_data_dir)
+  end
+
+  def gdk_reconfigure
+    GDK::Output.info "Running 'gdk reconfigure'.."
+    run!('gdk reconfigure', config.gdk_root)
+  end
+
+  def initdb_bin(version)
+    File.join(bin_path(version), 'initdb')
+  end
+
+  def pg_upgrade_bin(version)
+    File.join(bin_path(version), 'pg_upgrade')
+  end
+
+  def bin_path(version)
+    raise "Invalid PostgreSQL version #{version}" unless available_versions.key?(version)
+
+    available_versions[version]
+  end
+
+  def available_versions
+    @available_versions ||=
+      if asdf?
+        asdf_available_versions
+      elsif brew?
+        brew_cellar_available_versions
+      elsif apt?
+        apt_available_versions
+      else
+        abort 'Only Homebrew, asdf and apt based Linux systems supported.'
+      end
+  end
+
+  def asdf?
+    run(%w[asdf help]) != ''
+  end
+
+  def brew?
+    run(%w[brew help]) != ''
+  end
+
+  def apt?
+    run(%w[apt-cache help]) != ''
+  end
+
+  def asdf_available_versions
+    lines = run(%w[asdf list postgres])
+    return {} if lines.empty?
+
+    current_asdf_data_dir = ENV.fetch('ASDF_DATA_DIR', "#{ENV['HOME']}/.asdf")
+
+    lines.split.each_with_object({}) do |version, paths|
+      version.chomp!
+
+      paths[version.to_i] = "#{current_asdf_data_dir}/installs/postgres/#{version}/bin"
+    end
+  end
+
+  def brew_cellar_available_versions
+    POSTGRESQL_VERSIONS.each_with_object({}) do |version, paths|
+      brew_cellar_pg = run(%W[brew --cellar postgresql@#{version}])
+
+      next if brew_cellar_pg.empty?
+
+      brew_cellar_pg_bin = Dir.glob(File.join(brew_cellar_pg, '/*/bin'))
+
+      paths[version] = brew_cellar_pg_bin.last if brew_cellar_pg_bin.any?
+    end
+  end
+
+  def apt_available_versions
+    versions = POSTGRESQL_VERSIONS.map { |ver| "postgresql-#{ver}" }
+    lines = run(%w[apt search -o APT::Cache::Search::Version=1 ^postgresql-[0-9]*$])
+
+    return {} if lines.empty?
+
+    available_packages = Set.new
+
+    lines.split("\n").each do |line|
+      package_data = line.strip.split(' ')
+      available_packages << package_data.first.strip
+    end
+
+    postgresql_packages = available_packages & versions
+
+    postgresql_packages.each_with_object({}) do |package, paths|
+      version = package.gsub(/^postgresql-/, '').to_i
+      pg_path = "/usr/lib/postgresql/#{version}/bin"
+      paths[version] = pg_path if Dir.exist?(pg_path)
+    end
+  end
+
+  def config
+    @config ||= GDK.config
+  end
+
+  def run(cmd)
+    Shellout.new(cmd).try_run
+  end
+
+  def run!(cmd, chdir)
+    sh = Shellout.new(cmd, chdir: chdir)
+    sh.try_run
+
+    return true if sh.success?
+
+    GDK::Output.puts(sh.read_stdout)
+    GDK::Output.puts(sh.read_stderr)
+
+    raise "'#{cmd}' failed."
+  end
+
+  def run_in_tmp!(cmd)
+    run!(cmd, config.gdk_root.join('tmp'))
+  end
+end
+
+upgrader = PostgresUpgrader.new
+upgrader.upgrade!

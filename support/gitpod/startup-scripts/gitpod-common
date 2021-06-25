@@ -1,0 +1,5 @@
+#!/bin/bash
+
+log() {
+    echo "$(date) – $1" | tee -a /workspace/startup.log
+}

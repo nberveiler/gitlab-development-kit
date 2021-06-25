@@ -1,0 +1,51 @@
+# GitLab Development Kit
+
+Usage: gdk <command> [<args>]
+
+Manage services:
+
+  gdk start                                 # Start everything
+  gdk start redis postgresql                # Start specific services
+  gdk stop                                  # Stop all services and unload Runit
+  gdk stop redis postgresql                 # Stop specific service
+  gdk status                                # See status of all services
+  gdk restart                               # Restart everything
+  gdk restart redis postgresql              # Restart specific services
+
+  gdk tail                                  # Tail all logs
+  gdk tail redis postgresql                 # Tail specific logs
+
+  gdk thin                                  # Run Rails web server with thin in
+                                            #  foreground
+  gdk psql [-d gitlabhq_development]        # Run Postgres console
+  gdk redis-cli                             # Run Redis console
+
+  gdk measure                               # Generate a sitespeed.io report for given URL(s)
+  gdk measure-workflow                      # Generate a sitespeed.io report for given workflow(s)
+
+Manage GDK:
+
+  gdk install gitlab_repo=https://my-fork   # Install everything
+  gdk update                                # Pull application changes from Git
+  gdk reconfigure                           # Delete and regenerate all config
+                                            #  files created by GDK
+
+  gdk config get postgresql.port            # Get configuration values
+  gdk diff-config                           # Print difference between current
+                                            #  and new configuration values
+
+  gdk reset-data                            # Backs up and creates fresh git
+                                            #  repository, PostgreSQL data and
+                                            #  Rails upload directory
+  gdk pristine                              # Restore your GDK to a pristine
+                                            #  state. Deletes caches, temporary files, and
+                                            #  reinstalls dependencies. Does not delete data
+
+  gdk doctor                                # Run diagnostics on GDK
+  gdk version                               # Print current GDK version
+  gdk help                                  # Print this help text
+
+# Development admin account: root / 5iveL!fe
+
+For more information about GitLab development see
+https://docs.gitlab.com/ee/development/README.html.

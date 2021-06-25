@@ -1,0 +1,21 @@
+#!/bin/bash -ex
+
+parent_path=$(dirname "$0")
+
+# shellcheck source=support/ci/functions.sh
+source "${parent_path}"/functions.sh
+
+init
+
+if [ -n "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" ]; then
+  checkout "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"
+else
+  checkout "${CI_COMMIT_SHA}"
+fi
+
+install_gem
+install
+doctor
+start
+wait_for_boot
+QUIET=false "${parent_path}"/../test_url

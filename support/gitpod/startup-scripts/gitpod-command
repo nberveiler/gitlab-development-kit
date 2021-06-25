@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# This script is executed on every Gitpod workspace start.
+# https://www.gitpod.io/docs/config-start-tasks/
+
+# This script can be controlled with the following env vars:
+# - GITLAB_UPDATE_GDK=true         update GDK on every workspace start
+# - GITLAB_RUN_DB_MIGRATIONS=true  run DB migrations on every workspace start
+# - GITLAB_FIX_DB_KEY=true         fix DB key on every workspace start
+#
+# Set this env var in Gitpod with `gp env KEY=value` or here: https://gitpod.io/settings/
+# see https://www.gitpod.io/docs/environment-variables/.
+
+
+set -eo pipefail
+
+source "$HOME/gitpod-common"
+
+SECONDS=0
+cd /workspace/gitlab-development-kit
+
+# update GDK when env var GITLAB_UPDATE_GDK in https://gitpod.io/settings/ is set to true
+if [ "$GITLAB_UPDATE_GDK" = true ]; then
+    log "Updating GDK"
+    gdk update
+fi
+
+# GDK start
+log "GDK start"
+gdk start
+
+# Run DB migrations when env var GITLAB_RUN_DB_MIGRATIONS in https://gitpod.io/settings/ is set to true
+if [ "$GITLAB_RUN_DB_MIGRATIONS" = true ]; then
+    log "Running DB migrations"
+    make gitlab-db-migrate
+fi
+
+# Fix DB key when env var GITLAB_FIX_DB_KEY in https://gitpod.io/settings/ is set to true
+# see https://gitlab.com/gitlab-org/gitlab-foss/-/issues/56403#note_132515069
+if [ "$GITLAB_FIX_DB_KEY" = true ]; then
+    log "Fixing DB key"
+    cd gitlab
+    printf 'ApplicationSetting.last.update_column(:runners_registration_token_encrypted, nil)\nexit\n' | rails c
+    cd -
+fi
+
+# Waiting for GitLab ...
+gp await-port 3000
+printf "Waiting for GitLab at $(gp url 3000) ..."
+until $(curl -sNL $(gp url 3000) | grep -q "GitLab"); do printf '.'; sleep 5; done && echo ""
+
+# Give Gitpod a few more seconds to set up everything ...
+sleep 5
+log "$(printf "GitLab is up (took ~%.1f minutes)\n" "$((10*$SECONDS/60))e-1")"
+gp preview $(gp url 3000) || true
+
+cd "$GITPOD_REPO_ROOT"

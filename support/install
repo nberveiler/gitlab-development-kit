@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+# This is the GDK one line installation. For more information, please visit:
+# https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/index.md#one-line-installation
+#
+# Wrap everything in a function to ensure a partially downloaded install script
+# is not executed. Inspired by https://install.sandstorm.io/
+_() {
+
+set -euo pipefail
+
+CURRENT_ASDF_DIR="${ASDF_DIR:-${HOME}/.asdf}"
+ASDF_SH_PATH="${CURRENT_ASDF_DIR}/asdf.sh"
+
+GDK_INSTALL_DIR="gitlab-development-kit"
+REQUIRED_COMMANDS=(git make)
+
+error() {
+  echo "ERROR: ${1}" >&2
+  exit 1
+}
+
+ensure_required_commands_exist() {
+  for command in "${REQUIRED_COMMANDS[@]}"; do
+    if ! command -v "${command}" > /dev/null 2>&1; then
+      echo "ERROR: Please ensure ${command} is installed."
+      exit 1
+    fi
+  done
+}
+
+ensure_not_root() {
+  if [[ ${EUID} -eq 0 ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+clone_gdk_if_needed() {
+  if [[ -d ${GDK_INSTALL_DIR} ]]; then
+    echo "INFO: A ${GDK_INSTALL_DIR} directory already exists in the current working directory, resuming.."
+  else
+    git clone https://gitlab.com/gitlab-org/gitlab-development-kit.git ${GDK_INSTALL_DIR}
+  fi
+}
+
+bootstrap() {
+  make bootstrap
+}
+
+gdk_install() {
+  # shellcheck disable=SC1090
+  source "${ASDF_SH_PATH}"
+  gdk install
+}
+
+echo
+echo "INFO: This is the GDK one line installation. For more information, please visit:"
+echo "INFO: https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/index.md#one-line-installation"
+echo "INFO:"
+echo "INFO: The source for the installation script can be viewed at:"
+echo "INFO: https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/support/install"
+echo
+
+if ! ensure_not_root; then
+  error "Running as root is not supported."
+fi
+
+ensure_required_commands_exist
+clone_gdk_if_needed
+cd ${GDK_INSTALL_DIR} || exit
+bootstrap
+gdk_install
+
+echo
+echo "INFO: To make sure GDK commands are available in this shell and ensure you're"
+echo "INFO: in the newly installed GDK directory, please run:"
+echo
+echo "source \"${ASDF_SH_PATH}\""
+echo "cd ${GDK_INSTALL_DIR}"
+echo
+}
+
+# If we've reached here, the entire install script has been downloaded and
+# "should" be safe to execute.
+_ "$0" "$@"

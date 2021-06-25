@@ -1,0 +1,12 @@
+listen-http=<%= config.gitlab_pages.__uri %>
+artifacts-server=<%= config.__uri.merge('api/v4') %>
+pages-root=<%= config.gdk_root.join('gitlab', 'shared', 'pages') %>
+pages-domain=<%= config.gitlab_pages.host %>
+api-secret-key=<%= config.gitlab_pages.secret_file %>
+log-verbose=<%= config.gitlab_pages.verbose %>
+<%- if config.gitlab_pages.access_control? -%>
+auth-client-id=<%= config.gitlab_pages.auth_client_id %>
+auth-client-secret=<%= config.gitlab_pages.auth_client_secret %>
+auth-secret=<%= config.gitlab_pages.__auth_secret %>
+auth-redirect-uri=<%= config.gitlab_pages.__auth_redirect_uri %>
+<%- end -%>

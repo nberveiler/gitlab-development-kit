@@ -1,0 +1,68 @@
+# GDK Procfile services:
+# - all commands must start with 'exec'
+# - no inline shell scripts ('&&' or ';')
+#
+
+# Datasources
+#
+redis: exec redis-server <%= config.gdk_root.join('redis', 'redis.conf') %>
+<%= '#' unless config.object_store? %>minio: exec /usr/bin/env MINIO_REGION=gdk MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=gdk-minio minio server -C minio/config --address "<%= config.object_store.host %>:<%= config.object_store.port %>" --compat minio/data
+postgresql: exec support/postgresql-signal-wrapper <%= config.postgresql.bin %> -D <%= config.postgresql.data_dir %> -k <%= config.postgresql.dir %> -h '<%= config.postgresql.__active_host %>'
+<%= '#' unless config.postgresql.replica? %>postgresql-replica: exec support/postgresql-signal-wrapper <%= config.postgresql.bin %> -D <%= config.postgresql.replica_dir.join('data') %> -k <%= config.postgresql.replica_dir %> -h ''
+<%= '#' unless config.openldap? %>openldap: exec support/exec-cd gitlab-openldap libexec/slapd -F slapd.d -d2 -h "ldap://<%= config.hostname %>:3890"
+
+# Geo
+#
+<%= '#' unless config.geo? %>postgresql-geo: exec support/postgresql-signal-wrapper <%= config.postgresql.bin %> -D <%= config.postgresql.geo.dir.join('data') %> -k <%= config.postgresql.geo.dir %> -h '<%= config.postgresql.geo.__active_host %>'
+<%= '#' unless config.geo? %>geo-cursor: exec /usr/bin/env RAILS_ENV=development RAILS_RELATIVE_URL_ROOT=$relative_url_root support/geo-logcursor
+
+# Backend services
+#
+gitlab-workhorse: exec /usr/bin/env PATH="<%= config.gitlab.dir.join('workhorse') %>:$PATH" gitlab-workhorse -<%= config.workhorse.__listen_settings.__type %> <%= config.workhorse.__listen_settings.__address %> -cableSocket <%= config.gitlab.actioncable.__socket_file %> -listenAddr '<%= config.workhorse.__listen_address %>' -documentRoot <%= config.gitlab.dir.join('public') %> -developmentMode -secretPath <%= config.gitlab.dir.join('.gitlab_workhorse_secret') %> -config <%= config.gitlab.dir.join('workhorse', 'config.toml') %> -logFormat json
+rails-background-jobs: exec /usr/bin/env CACHE_CLASSES=$cache_classes BUNDLE_GEMFILE=$bundle_gemfile SIDEKIQ_WORKERS=1 RAILS_ENV=development RAILS_RELATIVE_URL_ROOT=$relative_url_root support/exec-cd gitlab bin/background_jobs start_foreground
+<%= '#' unless config.gitlab_k8s_agent.enabled %>gitlab-k8s-agent: exec /usr/bin/env OWN_PRIVATE_API_URL='<%= config.gitlab_k8s_agent.__private_api_url %>' gitlab-k8s-agent/build/gdk/bin/kas_race --configuration-file '<%= config.gitlab_k8s_agent.__config_file %>'
+<% if config.praefect? -%>
+praefect: exec <%= config.praefect.__praefect_build_bin_path %> -config <%= config.praefect.config_file %>
+<% config.praefect.__nodes.each_with_index do |praefect_node, index| -%>
+<%= praefect_node.service_name %>: exec <%= config.gitaly.__gitaly_build_bin_path %> <%= config.gdk_root.join(praefect_node.config_file) %>
+<% end -%>
+<% end -%>
+<% if config.gitaly? -%>
+gitaly: exec <%= config.gitaly.__gitaly_build_bin_path %> <%= config.gitaly.config_file %>
+<% end -%>
+
+# Frontend services
+#
+<%= '#' unless config.gitlab_ui? %>gitlab-ui: exec /usr/bin/env NODE_ENV=development support/exec-cd gitlab-ui yarn build --watch
+webpack: exec /usr/bin/env NODE_ENV=development DEV_SERVER_STATIC=<%= config.webpack.static?%> WEBPACK_VENDOR_DLL=<%= config.webpack.vendor_dll? %> DEV_SERVER_INCREMENTAL=<%= config.webpack.incremental? %> DEV_SERVER_LIVERELOAD=<%= config.webpack.live_reload? %> NO_SOURCEMAPS=<%= !config.webpack.sourcemaps? %> DEV_SERVER_PORT=<%= config.webpack.port %> DEV_SERVER_HOST=<%= config.webpack.host %> GITLAB_UI_WATCH=<%= config.gitlab_ui? %> support/exec-cd gitlab yarn dev-server
+rails-web: exec /usr/bin/env CACHE_CLASSES=$cache_classes BUNDLE_GEMFILE=$bundle_gemfile RAILS_ENV=development RAILS_RELATIVE_URL_ROOT=$relative_url_root ACTION_CABLE_IN_APP=<%= config.action_cable.in_app? %> ACTION_CABLE_WORKER_POOL_SIZE=<%= config.action_cable.worker_pool_size %> <%= "ENABLE_SHERLOCK=1" if config.gitlab.rails.sherlock? %> support/exec-cd gitlab bin/web start_foreground
+<%= '#' if config.action_cable.in_app? %>rails-actioncable: exec /usr/bin/env RAILS_ENV=development RAILS_RELATIVE_URL_ROOT=$relative_url_root ACTION_CABLE_WORKER_POOL_SIZE=<%= config.action_cable.worker_pool_size %> support/exec-cd gitlab bin/actioncable start_foreground
+<%= '#' unless config.gitlab_pages? %>gitlab-pages: exec gitlab-pages/bin/gitlab-pages -config=<%= config.gdk_root.join('gitlab-pages', 'gitlab-pages.conf') %>
+
+# Docker
+#
+<%= '#' unless config.registry? %>registry: exec support/docker-registry
+
+# Monitoring and tracing
+#
+<%= '#' unless config.grafana? %>grafana: exec support/exec-cd grafana grafana/bin/grafana-server -homepath grafana -config grafana.ini
+<%= '#' unless config.prometheus? %>prometheus: exec docker run -p <%= config.prometheus.port %>:<%= config.prometheus.port %> -v <%= config.gdk_root.join('prometheus', 'prometheus.yml') %>:/etc/prometheus/prometheus.yml prom/prometheus:v2.25.0
+<%= '#' unless config.tracer.jaeger? %>jaeger: exec jaeger/jaeger-<%= config.tracer.jaeger.version %>/jaeger-all-in-one --memory.max-traces 512 --http-server.host-port "<%= config.tracer.jaeger.listen_address %>:5778" --processor.jaeger-binary.server-host-port "<%= config.tracer.jaeger.listen_address %>:6832" --processor.jaeger-compact.server-host-port "<%= config.tracer.jaeger.listen_address %>:6831" --processor.zipkin-compact.server-host-port "<%= config.tracer.jaeger.listen_address %>:5775" --admin.http.host-port "<%= config.tracer.jaeger.listen_address %>:14269" --query.host-port "<%= config.tracer.jaeger.listen_address %>:16686" --collector.http-server.host-port "<%= config.tracer.jaeger.listen_address %>:14268" --collector.grpc-server.host-port "<%= config.tracer.jaeger.listen_address %>:14250" --collector.zipkin.host-port "<%= config.tracer.jaeger.listen_address %>:5555"
+
+# Additional services
+#
+sshd: exec <%= config.sshd.__full_command %>
+<%= '#' unless config.nginx? %>nginx: exec <%= config.nginx.bin %> -p <%= config.gdk_root.join('nginx') %> -c conf/nginx.conf
+<%= '#' unless config.elasticsearch? %>elasticsearch: exec elasticsearch/bin/elasticsearch
+
+# Gitlab Docs
+#
+<%= '#' unless config.gitlab_docs? %>gitlab-docs: exec support/start-gitlab-docs-nanoc
+
+# Gitlab Runner
+#
+<%= '#' unless config.runner? %>runner: exec <%= config.runner.bin %> --log-level debug run --config <%= config.runner.config_file %>
+
+# Mattermost
+#
+<%= '#' unless config.mattermost? %>mattermost: exec docker run --sig-proxy=true -v <%= config.gdk_root.join('mattermost', 'data') %>:/mm/mattermost-data/  -v <%= config.gdk_root.join('mattermost', 'mysql') %>:/var/lib/mysql --publish <%= config.mattermost.port %>:8065 <%= config.mattermost.image %>

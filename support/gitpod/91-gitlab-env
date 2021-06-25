@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Initialize asdf
+source "$HOME/.asdf/asdf.sh"
+
+# skip if gp is not installed
+hash gp 2>/dev/null || return
+
+# set RAILS_HOSTS for Gitpod
+port=$(gdk config get port)
+export RAILS_HOSTS=$(gp url ${port} | sed -e 's+^http[s]*://++')
+
+# set DEV_SERVER_PUBLIC_ADDR
+webpack_port=$(gdk config get webpack.port)
+export DEV_SERVER_PUBLIC_ADDR=$(gp url ${webpack_port})

@@ -1,0 +1,43 @@
+#!/bin/bash -ex
+
+parent_path=$(dirname "$0")
+
+# shellcheck source=support/ci/functions.sh
+source "${parent_path}"/functions.sh
+
+init
+
+# test GDK install
+if [ -n "${1}" ]; then
+  checkout "${1}"
+else
+  if [ -n "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" ]; then
+    checkout "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"
+  else
+    checkout "${CI_COMMIT_SHA}"
+  fi
+fi
+
+install_gem
+install
+start
+wait_for_boot
+QUIET=false "${parent_path}"/../test_url
+
+# test GDK self-update
+if [ -n "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}" ]; then
+  checkout "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}"
+else
+  checkout "${CI_COMMIT_SHA}"
+fi
+
+restart
+wait_for_boot
+QUIET=false "${parent_path}"/../test_url
+
+# test GDK components update
+install_gem
+update
+doctor
+wait_for_boot
+QUIET=false "${parent_path}"/../test_url

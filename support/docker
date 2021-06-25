@@ -1,0 +1,96 @@
+#!/bin/sh
+
+if [ -z "${VERIFY_IMAGE}" ]; then
+    echo "VERIFY_IMAGE variable must not be empty and must contain an image name"
+    exit 1
+fi
+
+# Unfortunately there is no nice way to do the following operations with docker commands
+# without pulling the image.
+remote_image_has_dependency_sha() {
+  IMAGE=$(echo "$1" | cut -f1 -d: | sed "s#${CI_REGISTRY}/##g")
+  TAG=$(echo "$1" | cut -f2 -d:)
+  CURRENT_SHA="$2"
+  JWT_AUTH_URL="https://gitlab.com/jwt/auth?service=container_registry&scope=repository:$IMAGE:pull"
+  echo "remote_image_check: Checking if remote image $IMAGE:$TAG exists and it's sha matches: $CURRENT_SHA"
+  if ! JWT_TOKEN=$(curl --silent --fail --user "$CI_REGISTRY_USER:$CI_BUILD_TOKEN" "$JWT_AUTH_URL"); then
+    echo "remote_image_check: Could not get JWT TOKEN"
+    return 1
+  fi
+
+  JWT_TOKEN=$(echo "$JWT_TOKEN" | jq -r '.token')
+  if ! CONFIG_DIGEST=$(curl --silent --fail --location --header "Authorization: Bearer $JWT_TOKEN" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" "https://$CI_REGISTRY/v2/$IMAGE/manifests/$TAG"); then
+    echo "remote_image_check: Image $IMAGE:$TAG doesn't exist"
+    return 1
+  fi
+
+  CONFIG_DIGEST=$(echo "$CONFIG_DIGEST" | jq -r .config.digest)
+  echo "remote_image_check: Config digest found: $IMAGE:$TAG -> $CONFIG_DIGEST"
+  if ! LABELS=$(curl --silent --fail --location --header "Authorization: Bearer $JWT_TOKEN" "https://$CI_REGISTRY/v2/$IMAGE/blobs/$CONFIG_DIGEST" | jq -r .container_config.Labels); then
+    echo "remote_image_check: Couldn't get labels for $IMAGE:$TAG"
+    return 1
+  fi
+
+  REMOTE_SHA=$(echo "$LABELS" | jq -r .dependencySHA)
+  echo "remote_image_check: dependencySHA label on image: $REMOTE_SHA"
+  if [ "${REMOTE_SHA}" = "${CURRENT_SHA}" ]; then
+    echo "remote_image_check: Image is up to date!"
+    return 0
+  fi
+
+  echo "remote_image_check: Image is not up to date"
+  return 1
+}
+
+case "$1" in
+    ci-login)
+        echo "Logging in"
+        docker login --username gitlab-ci-token --password "${CI_BUILD_TOKEN}" "${CI_REGISTRY}"
+        ;;
+    ci-logout)
+        echo "Logging out"
+        docker logout "${CI_REGISTRY}"
+        ;;
+    # The problem: We want to rebuild the image, if the Dockerfile, .tool-versions or
+    # packages_ubuntu.txt change. Unfortunately that isn't possible to do that in GitLab CI,
+    # because we cannot set a variable based on the contents of files. That is why we
+    # use this algorithm:
+    ci-build-if-necessary)
+        dependency_sha=$(cat support/bootstrap support/bootstrap-common.sh Dockerfile packages_ubuntu.txt .tool-versions | sha256sum | cut -d ' ' -f 1)
+        cache_image="${CI_REGISTRY_IMAGE}/asdf-cache:${dependency_sha}"
+
+        # Check if a docker image for our branch exists, e.g. base_name/branch-name:latest
+        # If it exists, we pull it and compare the dependencySHA label on it to the
+        # shasum of the Dockerfile, packages_ubuntu.txt and .tools-versions.
+        # If the label matches the shasum, we exit.
+        remote_image_has_dependency_sha "$VERIFY_IMAGE" "$dependency_sha" && exit 0
+
+        # Otherwise, we check if a caching image, e.g. base_name/asdf-cache:$dependencySHA exists.
+        # If it exists, we pull it and push it under the base_name/branch-name:latest.
+        # This operation is rather space-efficient, as the existing layers will be re-used.
+        # It also allows us to re-use images across branches if the dependencies didn't change.
+        echo "Checking if ${cache_image} exists"
+        if docker pull "${cache_image}"; then
+          echo "Cached Image ${cache_image} already exists, re-tagging as ${VERIFY_IMAGE}"
+          docker tag "${cache_image}" "${VERIFY_IMAGE}"
+          docker push "${VERIFY_IMAGE}"
+          echo "Success!"
+          exit 0
+        fi
+
+        # Building the image is necessary
+        echo "We need to build the image"
+        docker build . --squash \
+          --tag "${VERIFY_IMAGE}" --tag "${cache_image}" \
+          --label dependencySHA="${dependency_sha}"
+        docker push "${cache_image}"
+        docker push "${VERIFY_IMAGE}"
+        ;;
+    build)
+        docker build -t "${VERIFY_IMAGE}" .
+        ;;
+    *)
+        echo "Usage: $0 [ci-login|ci-logout|ci-build-if-necessary|build]"
+        exit 1
+        ;;
+esac

@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative '../lib/gdk'
+
+gitlab_docs_settings = GDK::Config.new.gitlab_docs
+
+GDK::Output.abort('GitLab Docs not configured. See doc/howto/gitlab_docs.md') unless gitlab_docs_settings.enabled?
+
+if gitlab_docs_settings.__all_configured?
+  GDK::Output.info('Starting nanoc to preview with live reload..')
+  puts Shellout.new(gitlab_docs_settings.__nanoc_live_cmd, chdir: 'gitlab-docs').run
+else
+  GDK::Output.info('Compiling documentation with nanoc and starting preview..')
+  puts Shellout.new(gitlab_docs_settings.__nanoc_view_cmd, chdir: 'gitlab-docs').run
+end
